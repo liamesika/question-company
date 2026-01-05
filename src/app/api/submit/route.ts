@@ -103,6 +103,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate contact field (required for user identification)
+    if (!answers.contact || typeof answers.contact !== 'string' || answers.contact.trim() === '') {
+      return NextResponse.json(
+        { error: 'Contact (email or phone) is required' },
+        { status: 400 }
+      );
+    }
+
+    // Normalize the contact identifier (lowercase, trim)
+    const userIdentifier = answers.contact.trim().toLowerCase();
+
     // Check for duplicate submission (idempotency)
     if (clientSubmissionId) {
       const existingSubmission = await prisma.diagnosticSubmission.findUnique({
@@ -148,6 +159,10 @@ export async function POST(request: NextRequest) {
         data: {
           source: 'effinity-diagnostic',
           clientSubmissionId: clientSubmissionId || null,
+          // User identity
+          userIdentifier: userIdentifier,
+          userDisplayName: null,
+          // Client info
           ip: clientInfo?.ip || null,
           country: clientInfo?.country || null,
           deviceType: mapDeviceType(clientInfo?.deviceType || ''),

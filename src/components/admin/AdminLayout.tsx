@@ -10,6 +10,8 @@ import {
   BarChart3,
   Menu,
   ChevronRight,
+  FileText,
+  UserCircle,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -18,7 +20,8 @@ interface AdminLayoutProps {
 
 const navItems = [
   { href: '/admin', label: 'Overview', icon: LayoutDashboard },
-  { href: '/admin/submissions', label: 'Submissions', icon: Users },
+  { href: '/admin/users', label: 'Users', icon: UserCircle },
+  { href: '/admin/submissions', label: 'Submissions', icon: FileText },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
 ];
 

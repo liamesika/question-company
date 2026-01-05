@@ -2,7 +2,7 @@ export interface DiagnosticQuestion {
   id: string;
   question: string;
   options: DiagnosticOption[];
-  type: 'single' | 'open';
+  type: 'single' | 'open' | 'contact';
 }
 
 export interface DiagnosticOption {
@@ -12,6 +12,7 @@ export interface DiagnosticOption {
 }
 
 export interface DiagnosticAnswers {
+  contact: string; // Email or phone - required for user identification
   q1: string;
   q2: string;
   q3: string;

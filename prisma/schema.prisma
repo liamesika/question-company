@@ -44,6 +44,10 @@ model DiagnosticSubmission {
   // Idempotency key - prevents duplicate submissions
   clientSubmissionId        String?         @unique
 
+  // User identity
+  userIdentifier            String          @default("")
+  userDisplayName           String?
+
   // Client info
   ip                        String?
   country                   String?
@@ -104,6 +108,7 @@ model DiagnosticSubmission {
   @@index([q8])
   @@index([sheetSyncStatus])
   @@index([clientSubmissionId])
+  @@index([userIdentifier])
 }
 
 model AdminUser {

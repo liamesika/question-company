@@ -2,10 +2,10 @@
 
 import { useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { Button, GlassCard, ProgressBar, RadioOption, TextArea } from '@/components/ui';
+import { Button, GlassCard, ProgressBar, RadioOption, TextArea, TextInput } from '@/components/ui';
 import { diagnosticQuestions } from '@/lib/questions';
 import { DiagnosticAnswers } from '@/types/diagnostic';
-import { ChevronLeft, ChevronRight, Send } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Send, Mail } from 'lucide-react';
 
 interface DiagnosticFormProps {
   onSubmit: (answers: DiagnosticAnswers) => void;
@@ -45,9 +45,21 @@ export function DiagnosticForm({ onSubmit, isSubmitting }: DiagnosticFormProps) 
     }
   }, [isFirstStep]);
 
+  // Validate contact field - must be email or phone
+  const isValidContact = (value: string) => {
+    if (!value) return false;
+    // Basic email pattern
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    // Phone pattern - at least 7 digits, can include +, -, spaces, parentheses
+    const phonePattern = /^[\d\s+\-().]{7,}$/;
+    return emailPattern.test(value) || phonePattern.test(value);
+  };
+
   const canProceed = currentQuestion.type === 'open'
     ? true
-    : Boolean(currentAnswer);
+    : currentQuestion.type === 'contact'
+      ? isValidContact(currentAnswer as string || '')
+      : Boolean(currentAnswer);
 
   return (
     <section
@@ -96,6 +108,19 @@ export function DiagnosticForm({ onSubmit, isSubmitting }: DiagnosticFormProps) 
                   onSelect={handleAnswer}
                 />
               ))
+            ) : currentQuestion.type === 'contact' ? (
+              <div className="space-y-4">
+                <TextInput
+                  type="text"
+                  placeholder="Email or phone number"
+                  value={(currentAnswer as string) || ''}
+                  onChange={(e) => handleAnswer(e.target.value)}
+                  icon={<Mail className="w-5 h-5" />}
+                />
+                <p className="text-white/50 text-sm">
+                  Enter your email address or phone number so we can identify your submissions
+                </p>
+              </div>
             ) : (
               <TextArea
                 placeholder="e.g., Excel, Google Sheets, Monday.com, Slack, WhatsApp groups, CRM..."
@@ -162,7 +187,9 @@ export function DiagnosticForm({ onSubmit, isSubmitting }: DiagnosticFormProps) 
         <p className="text-center text-white/40 text-sm mt-6">
           {currentQuestion.type === 'open'
             ? 'This helps us understand your current tech stack'
-            : 'Select the option that best describes your situation'}
+            : currentQuestion.type === 'contact'
+              ? 'We use this to track your submissions and send your results'
+              : 'Select the option that best describes your situation'}
         </p>
       </div>
 

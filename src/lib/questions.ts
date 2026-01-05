@@ -2,6 +2,12 @@ import { DiagnosticQuestion } from '@/types/diagnostic';
 
 export const diagnosticQuestions: DiagnosticQuestion[] = [
   {
+    id: 'contact',
+    question: 'Where should we send your personalized diagnostic report?',
+    type: 'contact',
+    options: [],
+  },
+  {
     id: 'q1',
     question: 'During an average month, how many different places do you check to understand what is really happening in your business?',
     type: 'single',
