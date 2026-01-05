@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DiagnosticAnswers } from '@/types/diagnostic';
-import { calculateChaosScore, ChaosScoreResult } from '@/lib/chaos-calculator';
-import { appendToSheet } from '@/lib/google-sheets';
+import { calculateChaosScore } from '@/lib/chaos-calculator';
 import { sendCRMWebhook, sendWhatsAppNotification, sendEmailConfirmation } from '@/lib/webhooks';
-import { formatTimestamp } from '@/lib/utils';
 import prisma from '@/lib/prisma';
+import { logger } from '@/lib/logger';
+
+// Google Sheets sync is disabled - PostgreSQL is the single source of truth
+const SHEETS_SYNC_ENABLED = process.env.SHEETS_SYNC_ENABLED === 'true';
 
 function parseHoursLost(range: string): number {
   // Parse ranges like "8-15", "20-40", "50-80", "100+"
@@ -31,10 +33,51 @@ function mapDeviceType(deviceType: string): 'mobile' | 'desktop' | 'tablet' | nu
   return null;
 }
 
+// Helper functions to reconstruct result data for duplicate submissions
+function getHeadlineForRiskLevel(riskLevel: string): string {
+  const headlines: Record<string, string> = {
+    LOW: 'Your operations show early signs of friction.',
+    MEDIUM: 'Your business is losing growth capacity silently.',
+    HIGH: 'Your business is running on hidden manual chaos.',
+    CRITICAL: 'Your operations are blocking your next scale stage.',
+  };
+  return headlines[riskLevel] || headlines.MEDIUM;
+}
+
+function getDescriptionForRiskLevel(riskLevel: string): string {
+  const descriptions: Record<string, string> = {
+    LOW: 'While your business runs reasonably well, small inefficiencies are compounding. Left unchecked, these micro-issues will become growth blockers within 6-12 months.',
+    MEDIUM: 'Significant operational overhead is eating into your margins and time. Your team is spending more energy maintaining the status quo than driving growth.',
+    HIGH: 'Critical operational gaps are forcing reactive management. Every day without systematic intervention increases the risk of costly errors and missed opportunities.',
+    CRITICAL: 'Your business has outgrown its operational foundation. Scaling further without restructuring will multiply current problems exponentially.',
+  };
+  return descriptions[riskLevel] || descriptions.MEDIUM;
+}
+
+function getHoursLostForRiskLevel(riskLevel: string): string {
+  const hours: Record<string, string> = {
+    LOW: '8-15',
+    MEDIUM: '20-40',
+    HIGH: '50-80',
+    CRITICAL: '100+',
+  };
+  return hours[riskLevel] || hours.MEDIUM;
+}
+
+function getLeakageForRiskLevel(riskLevel: string): string {
+  const leakage: Record<string, string> = {
+    LOW: '$2,000 - $5,000',
+    MEDIUM: '$8,000 - $20,000',
+    HIGH: '$25,000 - $60,000',
+    CRITICAL: '$75,000+',
+  };
+  return leakage[riskLevel] || leakage.MEDIUM;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { answers, clientInfo, utm } = body as {
+    const { answers, clientInfo, utm, clientSubmissionId } = body as {
       answers: DiagnosticAnswers;
       clientInfo: {
         ip: string;
@@ -49,6 +92,7 @@ export async function POST(request: NextRequest) {
         content?: string;
         term?: string;
       };
+      clientSubmissionId?: string;
     };
 
     // Validate answers
@@ -59,6 +103,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check for duplicate submission (idempotency)
+    if (clientSubmissionId) {
+      const existingSubmission = await prisma.diagnosticSubmission.findUnique({
+        where: { clientSubmissionId },
+      });
+
+      if (existingSubmission) {
+        logger.info('Duplicate submission detected, returning existing result', {
+          clientSubmissionId,
+          submissionId: existingSubmission.id,
+        });
+
+        // Return the existing submission result
+        const existingResult = {
+          score: existingSubmission.chaosScore,
+          riskLevel: existingSubmission.riskLevel,
+          headline: getHeadlineForRiskLevel(existingSubmission.riskLevel),
+          description: getDescriptionForRiskLevel(existingSubmission.riskLevel),
+          hoursLostPerMonth: getHoursLostForRiskLevel(existingSubmission.riskLevel),
+          moneyLeakageRange: getLeakageForRiskLevel(existingSubmission.riskLevel),
+        };
+
+        return NextResponse.json({
+          success: true,
+          result: existingResult,
+          submissionId: existingSubmission.id,
+          duplicate: true,
+        });
+      }
+    }
+
     // Calculate chaos score
     const result = calculateChaosScore(answers);
 
@@ -66,24 +141,13 @@ export async function POST(request: NextRequest) {
     const hoursLost = parseHoursLost(result.hoursLostPerMonth);
     const leakage = parseLeakage(result.moneyLeakageRange);
 
-    // Prepare submission data for Google Sheets
-    const submissionData = {
-      timestamp: formatTimestamp(),
-      answers,
-      chaosScore: result.score,
-      riskLevel: result.riskLevel,
-      ip: clientInfo?.ip || 'unknown',
-      deviceType: clientInfo?.deviceType || 'unknown',
-      country: clientInfo?.country || 'unknown',
-      userAgent: clientInfo?.userAgent || 'unknown',
-    };
-
-    // Save to database first
+    // Save to PostgreSQL (single source of truth)
     let dbSubmission;
     try {
       dbSubmission = await prisma.diagnosticSubmission.create({
         data: {
           source: 'effinity-diagnostic',
+          clientSubmissionId: clientSubmissionId || null,
           ip: clientInfo?.ip || null,
           country: clientInfo?.country || null,
           deviceType: mapDeviceType(clientInfo?.deviceType || ''),
@@ -108,44 +172,49 @@ export async function POST(request: NextRequest) {
           estimatedLeakageMin: leakage.min,
           estimatedLeakageMax: leakage.max,
           status: 'NEW',
+          // Google Sheets sync is disabled - mark as DISABLED
+          sheetSyncStatus: SHEETS_SYNC_ENABLED ? 'PENDING' : 'DISABLED',
         },
       });
-      console.log('Submission saved to database:', dbSubmission.id);
+      logger.submission('created', dbSubmission.id, { chaosScore: result.score, riskLevel: result.riskLevel });
     } catch (dbError) {
-      console.error('Database save error:', dbError);
-      // Continue even if DB fails - we'll still save to sheets
+      logger.error('Database save error', { error: String(dbError) });
+      return NextResponse.json(
+        { error: 'Failed to save submission' },
+        { status: 500 }
+      );
     }
 
-    // Run all async operations in parallel
-    const [sheetResult, webhookResult, whatsappResult, emailResult] = await Promise.allSettled([
-      appendToSheet(submissionData),
+    // Run optional webhook integrations (non-blocking)
+    const submissionData = {
+      timestamp: new Date().toISOString(),
+      answers,
+      chaosScore: result.score,
+      riskLevel: result.riskLevel,
+      ip: clientInfo?.ip || 'unknown',
+      deviceType: clientInfo?.deviceType || 'unknown',
+      country: clientInfo?.country || 'unknown',
+      userAgent: clientInfo?.userAgent || 'unknown',
+    };
+
+    Promise.allSettled([
       sendCRMWebhook(submissionData),
       sendWhatsAppNotification(submissionData),
       sendEmailConfirmation(submissionData),
-    ]);
+    ]).then(([webhookResult, whatsappResult, emailResult]) => {
+      logger.info('Webhook integrations processed', {
+        submissionId: dbSubmission.id,
+        webhookSent: webhookResult.status === 'fulfilled' && webhookResult.value,
+        whatsappSent: whatsappResult.status === 'fulfilled' && whatsappResult.value,
+        emailSent: emailResult.status === 'fulfilled' && emailResult.value,
+      });
+    });
 
-    // Update DB with sheet row ID if available
-    if (dbSubmission && sheetResult.status === 'fulfilled' && sheetResult.value) {
-      try {
-        await prisma.diagnosticSubmission.update({
-          where: { id: dbSubmission.id },
-          data: { sheetRowId: 'synced' },
-        });
-      } catch (updateError) {
-        console.error('Failed to update sheet sync status:', updateError);
-      }
-    }
-
-    // Log results for monitoring
-    console.log('Submission processed:', {
-      id: dbSubmission?.id,
+    // Log submission success
+    logger.info('Submission saved to database', {
+      submissionId: dbSubmission.id,
       chaosScore: result.score,
       riskLevel: result.riskLevel,
-      dbSaved: !!dbSubmission,
-      sheetSaved: sheetResult.status === 'fulfilled' && sheetResult.value,
-      webhookSent: webhookResult.status === 'fulfilled' && webhookResult.value,
-      whatsappSent: whatsappResult.status === 'fulfilled' && whatsappResult.value,
-      emailSent: emailResult.status === 'fulfilled' && emailResult.value,
     });
 
     return NextResponse.json({

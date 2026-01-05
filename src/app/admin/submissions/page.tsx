@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { GlassCard, Button } from '@/components/ui';
 import { SubmissionsTable } from '@/components/admin/SubmissionsTable';
-import { SubmissionFilters, defaultFilters } from '@/components/admin/SubmissionFilters';
-import { ChevronLeft, ChevronRight, Download, Trash2 } from 'lucide-react';
+import { SubmissionFilters, defaultFilters, FilterState } from '@/components/admin/SubmissionFilters';
+import { ChevronLeft, ChevronRight, Download, Trash2, RefreshCw } from 'lucide-react';
 
 interface Submission {
   id: string;
@@ -25,19 +26,70 @@ interface PaginationInfo {
   totalPages: number;
 }
 
+function parseFiltersFromURL(searchParams: URLSearchParams): FilterState {
+  return {
+    search: searchParams.get('search') || '',
+    riskLevel: searchParams.get('riskLevel')?.split(',').filter(Boolean) || [],
+    status: searchParams.get('status')?.split(',').filter(Boolean) || [],
+    deviceType: searchParams.get('deviceType')?.split(',').filter(Boolean) || [],
+    chaosScoreMin: searchParams.get('chaosScoreMin') || '',
+    chaosScoreMax: searchParams.get('chaosScoreMax') || '',
+    q8: searchParams.get('q8')?.split(',').filter(Boolean) || [],
+    country: searchParams.get('country') || '',
+    startDate: searchParams.get('startDate') || '',
+    endDate: searchParams.get('endDate') || '',
+  };
+}
+
+function filtersToURLParams(filters: FilterState): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.search) params.set('search', filters.search);
+  if (filters.riskLevel.length) params.set('riskLevel', filters.riskLevel.join(','));
+  if (filters.status.length) params.set('status', filters.status.join(','));
+  if (filters.deviceType.length) params.set('deviceType', filters.deviceType.join(','));
+  if (filters.chaosScoreMin) params.set('chaosScoreMin', filters.chaosScoreMin);
+  if (filters.chaosScoreMax) params.set('chaosScoreMax', filters.chaosScoreMax);
+  if (filters.q8.length) params.set('q8', filters.q8.join(','));
+  if (filters.country) params.set('country', filters.country);
+  if (filters.startDate) params.set('startDate', filters.startDate);
+  if (filters.endDate) params.set('endDate', filters.endDate);
+  return params;
+}
+
 export default function SubmissionsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Initialize state from URL params
+  const initialFilters = useMemo(() => parseFiltersFromURL(searchParams), [searchParams]);
+  const initialPage = parseInt(searchParams.get('page') || '1', 10);
+  const initialSortBy = searchParams.get('sortBy') || 'createdAt';
+  const initialSortOrder = searchParams.get('sortOrder') || 'desc';
+
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo>({
-    page: 1,
+    page: initialPage,
     limit: 20,
     total: 0,
     totalPages: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState('createdAt');
-  const [sortOrder, setSortOrder] = useState('desc');
-  const [filters, setFilters] = useState(defaultFilters);
+  const [sortBy, setSortBy] = useState(initialSortBy);
+  const [sortOrder, setSortOrder] = useState(initialSortOrder);
+  const [filters, setFilters] = useState<FilterState>(initialFilters);
+
+  // Update URL when filters change
+  const updateURL = useCallback((newFilters: FilterState, newPage: number, newSortBy: string, newSortOrder: string) => {
+    const params = filtersToURLParams(newFilters);
+    if (newPage > 1) params.set('page', newPage.toString());
+    if (newSortBy !== 'createdAt') params.set('sortBy', newSortBy);
+    if (newSortOrder !== 'desc') params.set('sortOrder', newSortOrder);
+
+    const queryString = params.toString();
+    const newURL = queryString ? `/admin/submissions?${queryString}` : '/admin/submissions';
+    router.replace(newURL, { scroll: false });
+  }, [router]);
 
   const fetchSubmissions = useCallback(async () => {
     setIsLoading(true);
@@ -77,12 +129,28 @@ export default function SubmissionsPage() {
   }, [fetchSubmissions]);
 
   const handleSort = (field: string) => {
-    if (sortBy === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortBy(field);
-      setSortOrder('desc');
-    }
+    const newSortOrder = sortBy === field ? (sortOrder === 'asc' ? 'desc' : 'asc') : 'desc';
+    const newSortBy = field;
+    setSortBy(newSortBy);
+    setSortOrder(newSortOrder);
+    updateURL(filters, pagination.page, newSortBy, newSortOrder);
+  };
+
+  const handleFilterChange = (newFilters: FilterState) => {
+    setFilters(newFilters);
+    setPagination(prev => ({ ...prev, page: 1 }));
+    updateURL(newFilters, 1, sortBy, sortOrder);
+  };
+
+  const handleFilterReset = () => {
+    setFilters(defaultFilters);
+    setPagination(prev => ({ ...prev, page: 1 }));
+    router.replace('/admin/submissions', { scroll: false });
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setPagination(prev => ({ ...prev, page: newPage }));
+    updateURL(filters, newPage, sortBy, sortOrder);
   };
 
   const handleStatusChange = async (ids: string[], status: string) => {
@@ -178,14 +246,8 @@ export default function SubmissionsPage() {
       {/* Filters */}
       <SubmissionFilters
         filters={filters}
-        onChange={(newFilters) => {
-          setFilters(newFilters);
-          setPagination(prev => ({ ...prev, page: 1 }));
-        }}
-        onReset={() => {
-          setFilters(defaultFilters);
-          setPagination(prev => ({ ...prev, page: 1 }));
-        }}
+        onChange={handleFilterChange}
+        onReset={handleFilterReset}
       />
 
       {/* Bulk actions */}
@@ -253,7 +315,7 @@ export default function SubmissionsPage() {
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
-              onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+              onClick={() => handlePageChange(pagination.page - 1)}
               disabled={pagination.page === 1}
             >
               <ChevronLeft className="w-4 h-4" />
@@ -263,7 +325,7 @@ export default function SubmissionsPage() {
             </span>
             <Button
               variant="ghost"
-              onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+              onClick={() => handlePageChange(pagination.page + 1)}
               disabled={pagination.page === pagination.totalPages}
             >
               <ChevronRight className="w-4 h-4" />

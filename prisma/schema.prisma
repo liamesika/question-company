@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum DeviceType {
@@ -28,11 +28,21 @@ enum LeadStatus {
   CLOSED
 }
 
+enum SheetSyncStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  DISABLED
+}
+
 model DiagnosticSubmission {
-  id                        String      @id @default(uuid())
-  createdAt                 DateTime    @default(now())
-  updatedAt                 DateTime    @updatedAt
-  source                    String      @default("effinity-diagnostic")
+  id                        String          @id @default(uuid())
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+  source                    String          @default("effinity-diagnostic")
+
+  // Idempotency key - prevents duplicate submissions
+  clientSubmissionId        String?         @unique
 
   // Client info
   ip                        String?
@@ -56,7 +66,7 @@ model DiagnosticSubmission {
   q6                        String
   q7                        String
   q8                        String
-  q9                        String?     // Open question - systems used
+  q9                        String?
 
   // Computed scores
   chaosScore                Int
@@ -69,30 +79,99 @@ model DiagnosticSubmission {
   leadEmail                 String?
   leadPhone                 String?
   notes                     String?
-  status                    LeadStatus  @default(NEW)
+  status                    LeadStatus      @default(NEW)
 
-  // Google Sheet reference
+  // Google Sheet sync
   sheetRowId                String?
+  sheetSyncStatus           SheetSyncStatus @default(PENDING)
+  sheetSyncError            String?
+  sheetSyncAttempts         Int             @default(0)
+  lastSheetSyncAt           DateTime?
 
   // Soft delete
   deletedAt                 DateTime?
+
+  // Activity log
+  activityLogs              ActivityLog[]
 
   @@index([createdAt])
   @@index([riskLevel])
   @@index([chaosScore])
   @@index([status])
   @@index([deletedAt])
+  @@index([country])
+  @@index([deviceType])
+  @@index([q8])
+  @@index([sheetSyncStatus])
+  @@index([clientSubmissionId])
 }
 
 model AdminUser {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  name         String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  lastLoginAt  DateTime?
-  isActive     Boolean  @default(true)
+  id                    String        @id @default(uuid())
+  email                 String        @unique
+  passwordHash          String
+  name                  String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  lastLoginAt           DateTime?
+  isActive              Boolean       @default(true)
+
+  // Security
+  mustResetPassword     Boolean       @default(true)
+  failedLoginAttempts   Int           @default(0)
+  lockedUntil           DateTime?
+
+  // Refresh tokens
+  refreshTokens         RefreshToken[]
+
+  // Activity logs
+  activityLogs          ActivityLog[]
 
   @@index([email])
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  token       String    @unique
+  adminId     String
+  admin       AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
+
+  @@index([token])
+  @@index([adminId])
+}
+
+model ActivityLog {
+  id            String               @id @default(uuid())
+  createdAt     DateTime             @default(now())
+
+  // Actor
+  adminId       String?
+  admin         AdminUser?           @relation(fields: [adminId], references: [id])
+
+  // Target
+  submissionId  String?
+  submission    DiagnosticSubmission? @relation(fields: [submissionId], references: [id])
+
+  // Action details
+  action        String               // e.g., "STATUS_CHANGE", "NOTE_EDIT", "SHEET_SYNC_RETRY"
+  details       String?              // JSON string with action details
+
+  @@index([submissionId])
+  @@index([adminId])
+  @@index([createdAt])
+}
+
+model LoginAttempt {
+  id          String   @id @default(uuid())
+  ip          String
+  email       String
+  success     Boolean
+  createdAt   DateTime @default(now())
+  userAgent   String?
+
+  @@index([ip, createdAt])
+  @@index([email, createdAt])
 }

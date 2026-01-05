@@ -1,19 +1,32 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
+
+function generateSecurePassword(length: number = 24): string {
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+  const randomBytes = crypto.randomBytes(length);
+  let password = '';
+  for (let i = 0; i < length; i++) {
+    password += charset[randomBytes[i] % charset.length];
+  }
+  return password;
+}
 
 async function main() {
   // Create default admin user
   const adminEmail = process.env.ADMIN_EMAILS?.split(',')[0]?.trim() || 'admin@example.com';
-  const defaultPassword = 'admin123'; // Change this in production!
+
+  // Generate secure random password instead of using a hardcoded one
+  const generatedPassword = generateSecurePassword(24);
 
   const existingAdmin = await prisma.adminUser.findUnique({
     where: { email: adminEmail.toLowerCase() },
   });
 
   if (!existingAdmin) {
-    const passwordHash = await bcrypt.hash(defaultPassword, 12);
+    const passwordHash = await bcrypt.hash(generatedPassword, 12);
 
     await prisma.adminUser.create({
       data: {
@@ -21,12 +34,21 @@ async function main() {
         passwordHash,
         name: 'Admin',
         isActive: true,
+        mustResetPassword: true, // Force password reset on first login
       },
     });
 
-    console.log(`Created admin user: ${adminEmail}`);
-    console.log(`Default password: ${defaultPassword}`);
-    console.log('IMPORTANT: Change this password immediately in production!');
+    console.log('');
+    console.log('='.repeat(60));
+    console.log('ADMIN USER CREATED');
+    console.log('='.repeat(60));
+    console.log(`Email:    ${adminEmail}`);
+    console.log(`Password: ${generatedPassword}`);
+    console.log('');
+    console.log('IMPORTANT: Save this password now! It will not be shown again.');
+    console.log('You will be required to change it on first login.');
+    console.log('='.repeat(60));
+    console.log('');
   } else {
     console.log(`Admin user already exists: ${adminEmail}`);
   }

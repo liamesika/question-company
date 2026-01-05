@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   Copy,
   Download,
-  ExternalLink,
   Save,
   Trash2,
   Phone,
@@ -54,7 +53,6 @@ interface Submission {
   leadPhone: string | null;
   notes: string | null;
   status: string;
-  sheetRowId: string | null;
 }
 
 const questionLabels: Record<string, string> = {
@@ -458,16 +456,6 @@ Country: ${submission.country || 'N/A'}
                 <CheckCircle className="w-4 h-4 mr-2" />
                 Mark Contacted
               </Button>
-              {submission.sheetRowId && (
-                <Button
-                  variant="secondary"
-                  onClick={() => {/* Open Google Sheet */}}
-                  className="w-full justify-start"
-                >
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Open in Google Sheets
-                </Button>
-              )}
               <Button
                 variant="ghost"
                 onClick={handleDelete}

@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui';
 import { Search, Filter, X, ChevronDown } from 'lucide-react';
 
-interface FilterState {
+export interface FilterState {
   search: string;
   riskLevel: string[];
   status: string[];

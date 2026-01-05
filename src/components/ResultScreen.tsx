@@ -6,7 +6,7 @@ import { Button, GlassCard } from '@/components/ui';
 import { ChaosScoreResult } from '@/types/diagnostic';
 import { getRiskColor, getRiskGradient } from '@/lib/chaos-calculator';
 import { useInView } from '@/hooks/useInView';
-import { Calendar, TrendingDown, Clock, AlertTriangle, CheckCircle, XCircle, AlertCircle, Flame } from 'lucide-react';
+import { TrendingDown, Clock, AlertTriangle, CheckCircle, XCircle, AlertCircle, Flame, MessageCircle } from 'lucide-react';
 
 interface ResultScreenProps {
   result: ChaosScoreResult;
@@ -15,7 +15,13 @@ interface ResultScreenProps {
 export function ResultScreen({ result }: ResultScreenProps) {
   const [sectionRef, sectionInView] = useInView<HTMLDivElement>({ threshold: 0.1 });
   const [animatedScore, setAnimatedScore] = useState(0);
-  const bookingUrl = process.env.NEXT_PUBLIC_BOOKING_URL || '#';
+
+  // WhatsApp CTA with pre-filled message
+  const whatsappNumber = '972558835990';
+  const whatsappMessage = encodeURIComponent(
+    `Hi, I just completed the Effinity Business Diagnostic. My risk level is ${result.riskLevel} and my chaos score is ${result.score}. I'd like to book a 15-minute review.`
+  );
+  const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
 
   useEffect(() => {
     if (sectionInView) {
@@ -197,35 +203,47 @@ export function ResultScreen({ result }: ResultScreenProps) {
           ))}
         </div>
 
-        {/* CTA Section */}
+        {/* WhatsApp CTA Section */}
         <GlassCard
           variant="elevated"
           className={cn(
-            'p-8 md:p-12 text-center',
+            'p-8 md:p-12 text-center relative overflow-hidden',
             'opacity-0 transition-all duration-700 delay-400',
             sectionInView && 'opacity-100 animate-slide-up'
           )}
         >
-          <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
-            Stop the Operational Bleed
-          </h2>
-          <p className="text-white/60 mb-8 max-w-xl mx-auto">
-            In 15 minutes, we&apos;ll show you exactly where your operations are breaking
-            and how to fix them systematically.
-          </p>
-          <Button
-            size="lg"
-            onClick={() => window.open(bookingUrl, '_blank')}
-            className="group text-lg px-10"
-          >
-            <span className="flex items-center gap-3">
-              <Calendar className="w-5 h-5" />
+          {/* Subtle WhatsApp green glow */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-[#25D366]/10 rounded-full blur-[100px] pointer-events-none" />
+
+          <div className="relative z-10">
+            <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">
               Book a 15-minute Private Operations Review
-            </span>
-          </Button>
-          <p className="text-white/40 text-sm mt-4">
-            No sales pitch. Just clarity.
-          </p>
+            </h2>
+            <p className="text-lg text-white/60 mb-8 max-w-xl mx-auto">
+              No sales pitch. Just clarity.
+            </p>
+
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-3 px-8 py-4 md:px-10 md:py-5
+                         bg-[#25D366] hover:bg-[#20BD5A] active:bg-[#1DA851]
+                         text-white font-semibold text-lg md:text-xl
+                         rounded-xl shadow-lg shadow-[#25D366]/25
+                         transform transition-all duration-200
+                         hover:scale-[1.02] hover:shadow-xl hover:shadow-[#25D366]/30
+                         focus:outline-none focus:ring-4 focus:ring-[#25D366]/40
+                         active:scale-[0.98]"
+            >
+              <MessageCircle className="w-6 h-6 md:w-7 md:h-7" />
+              <span>Book on WhatsApp</span>
+            </a>
+
+            <p className="text-white/40 text-sm mt-6">
+              Opens WhatsApp with your diagnostic results
+            </p>
+          </div>
         </GlassCard>
 
         {/* Footer */}
