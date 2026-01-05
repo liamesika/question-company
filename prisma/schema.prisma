@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+enum DeviceType {
+  mobile
+  desktop
+  tablet
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  DISQUALIFIED
+  CLOSED
+}
+
+model DiagnosticSubmission {
+  id                        String      @id @default(uuid())
+  createdAt                 DateTime    @default(now())
+  updatedAt                 DateTime    @updatedAt
+  source                    String      @default("effinity-diagnostic")
+
+  // Client info
+  ip                        String?
+  country                   String?
+  deviceType                DeviceType?
+  userAgent                 String?
+
+  // UTM parameters
+  utmSource                 String?
+  utmMedium                 String?
+  utmCampaign               String?
+  utmContent                String?
+  utmTerm                   String?
+
+  // Questionnaire answers
+  q1                        String
+  q2                        String
+  q3                        String
+  q4                        String
+  q5                        String
+  q6                        String
+  q7                        String
+  q8                        String
+  q9                        String?     // Open question - systems used
+
+  // Computed scores
+  chaosScore                Int
+  riskLevel                 RiskLevel
+  estimatedHoursLostMonthly Int
+  estimatedLeakageMin       Int
+  estimatedLeakageMax       Int
+
+  // Lead management
+  leadEmail                 String?
+  leadPhone                 String?
+  notes                     String?
+  status                    LeadStatus  @default(NEW)
+
+  // Google Sheet reference
+  sheetRowId                String?
+
+  // Soft delete
+  deletedAt                 DateTime?
+
+  @@index([createdAt])
+  @@index([riskLevel])
+  @@index([chaosScore])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model AdminUser {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastLoginAt  DateTime?
+  isActive     Boolean  @default(true)
+
+  @@index([email])
+}
