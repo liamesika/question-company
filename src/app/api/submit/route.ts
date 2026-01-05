@@ -5,8 +5,7 @@ import { sendCRMWebhook, sendWhatsAppNotification, sendEmailConfirmation } from 
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
-// Google Sheets sync is disabled - PostgreSQL is the single source of truth
-const SHEETS_SYNC_ENABLED = process.env.SHEETS_SYNC_ENABLED === 'true';
+// PostgreSQL is the single source of truth - no Google Sheets sync
 
 function parseHoursLost(range: string): number {
   // Parse ranges like "8-15", "20-40", "50-80", "100+"
@@ -187,8 +186,7 @@ export async function POST(request: NextRequest) {
           estimatedLeakageMin: leakage.min,
           estimatedLeakageMax: leakage.max,
           status: 'NEW',
-          // Google Sheets sync is disabled - mark as DISABLED
-          sheetSyncStatus: SHEETS_SYNC_ENABLED ? 'PENDING' : 'DISABLED',
+          sheetSyncStatus: 'DISABLED',
         },
       });
       logger.submission('created', dbSubmission.id, { chaosScore: result.score, riskLevel: result.riskLevel });
