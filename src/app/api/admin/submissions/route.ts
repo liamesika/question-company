@@ -96,10 +96,16 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error fetching submissions:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch submissions' },
-      { status: 500 }
-    );
+    // Return safe defaults instead of 500 error to prevent UI crashes
+    return NextResponse.json({
+      submissions: [],
+      pagination: {
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0,
+      },
+    });
   }
 }
 

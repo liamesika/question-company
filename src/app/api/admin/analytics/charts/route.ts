@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
+// Safe defaults for when DB queries fail
+const EMPTY_RESPONSE = {
+  submissionsOverTime: [],
+  scoreHistogram: [
+    { range: '0-20', count: 0 },
+    { range: '21-40', count: 0 },
+    { range: '41-60', count: 0 },
+    { range: '61-80', count: 0 },
+    { range: '81-100', count: 0 },
+  ],
+  funnel: [
+    { stage: 'New', count: 0 },
+    { stage: 'Contacted', count: 0 },
+    { stage: 'Qualified', count: 0 },
+    { stage: 'Closed', count: 0 },
+  ],
+  insights: [],
+};
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -105,10 +124,8 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error fetching chart data:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch chart data' },
-      { status: 500 }
-    );
+    // Return safe defaults instead of 500 error to prevent UI crashes
+    return NextResponse.json(EMPTY_RESPONSE);
   }
 }
 

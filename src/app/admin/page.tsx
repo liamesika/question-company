@@ -52,6 +52,24 @@ export default function AdminOverviewPage() {
     fetchData();
   }, [dateRange]);
 
+  // Safe defaults for when API fails
+  const defaultData: OverviewData = {
+    kpis: {
+      totalSubmissions: 0,
+      submissions7d: 0,
+      submissions30d: 0,
+      avgChaosScore: 0,
+      highCriticalPercentage: 0,
+      mostCommonBlocker: 'N/A',
+      attentionNeeded: 0,
+    },
+    distributions: {
+      riskLevel: [],
+      q8: [],
+      status: [],
+    },
+  };
+
   const fetchData = async () => {
     setIsLoading(true);
     try {
@@ -63,10 +81,24 @@ export default function AdminOverviewPage() {
       }
 
       const response = await fetch(`/api/admin/analytics/overview?${params}`);
+
+      // Handle non-200 responses gracefully
+      if (!response.ok) {
+        console.error('API returned non-200:', response.status);
+        setData(defaultData);
+        return;
+      }
+
       const result = await response.json();
-      setData(result);
+      // Ensure the result has proper structure
+      setData({
+        kpis: result.kpis ?? defaultData.kpis,
+        distributions: result.distributions ?? defaultData.distributions,
+      });
     } catch (error) {
       console.error('Error fetching overview:', error);
+      // Set safe defaults on error
+      setData(defaultData);
     } finally {
       setIsLoading(false);
     }
@@ -97,7 +129,7 @@ export default function AdminOverviewPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           title="Total Submissions"
-          value={data?.kpis.totalSubmissions || 0}
+          value={data?.kpis?.totalSubmissions ?? 0}
           subtitle="All time"
           icon={Users}
           color="default"
@@ -106,7 +138,7 @@ export default function AdminOverviewPage() {
         />
         <KPICard
           title="Last 7 Days"
-          value={data?.kpis.submissions7d || 0}
+          value={data?.kpis?.submissions7d ?? 0}
           subtitle="New submissions"
           icon={Calendar}
           color="info"
@@ -115,13 +147,13 @@ export default function AdminOverviewPage() {
         />
         <KPICard
           title="Avg Chaos Score"
-          value={data?.kpis.avgChaosScore || 0}
+          value={data?.kpis?.avgChaosScore ?? 0}
           subtitle="Out of 100"
           icon={Zap}
           color={
-            (data?.kpis.avgChaosScore || 0) > 60
+            (data?.kpis?.avgChaosScore ?? 0) > 60
               ? 'danger'
-              : (data?.kpis.avgChaosScore || 0) > 40
+              : (data?.kpis?.avgChaosScore ?? 0) > 40
                 ? 'warning'
                 : 'success'
           }
@@ -129,7 +161,7 @@ export default function AdminOverviewPage() {
         />
         <KPICard
           title="High/Critical Risk"
-          value={`${data?.kpis.highCriticalPercentage || 0}%`}
+          value={`${data?.kpis?.highCriticalPercentage ?? 0}%`}
           subtitle="Of all submissions"
           icon={AlertTriangle}
           color="danger"
@@ -142,7 +174,7 @@ export default function AdminOverviewPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <KPICard
           title="Last 30 Days"
-          value={data?.kpis.submissions30d || 0}
+          value={data?.kpis?.submissions30d ?? 0}
           subtitle="Submissions"
           icon={TrendingUp}
           color="info"
@@ -150,7 +182,7 @@ export default function AdminOverviewPage() {
         />
         <KPICard
           title="Most Common Blocker"
-          value={blockerLabels[data?.kpis.mostCommonBlocker || ''] || data?.kpis.mostCommonBlocker || 'N/A'}
+          value={blockerLabels[data?.kpis?.mostCommonBlocker ?? ''] || data?.kpis?.mostCommonBlocker || 'N/A'}
           subtitle="Growth blocker (Q8)"
           icon={Target}
           color="warning"
@@ -158,7 +190,7 @@ export default function AdminOverviewPage() {
         />
         <KPICard
           title="Needs Attention"
-          value={data?.kpis.attentionNeeded || 0}
+          value={data?.kpis?.attentionNeeded ?? 0}
           subtitle="NEW + HIGH/CRITICAL"
           icon={Bell}
           color="danger"
@@ -178,24 +210,29 @@ export default function AdminOverviewPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {data?.distributions.riskLevel.map((item) => {
-                const total = data.distributions.riskLevel.reduce((sum, i) => sum + i.value, 0);
-                const percentage = total > 0 ? (item.value / total) * 100 : 0;
-                return (
-                  <div key={item.name} className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-white/70">{item.name}</span>
-                      <span className="text-white">{item.value} ({Math.round(percentage)}%)</span>
+              {(data?.distributions?.riskLevel ?? []).length === 0 ? (
+                <p className="text-white/50 text-center py-8">No data available</p>
+              ) : (
+                (data?.distributions?.riskLevel ?? []).map((item) => {
+                  const riskLevels = data?.distributions?.riskLevel ?? [];
+                  const total = riskLevels.reduce((sum, i) => sum + i.value, 0);
+                  const percentage = total > 0 ? (item.value / total) * 100 : 0;
+                  return (
+                    <div key={item.name} className="space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-white/70">{item.name}</span>
+                        <span className="text-white">{item.value} ({Math.round(percentage)}%)</span>
+                      </div>
+                      <div className="h-2 bg-dark-600 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${getRiskColor(item.name)} rounded-full transition-all duration-500`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="h-2 bg-dark-600 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full ${getRiskColor(item.name)} rounded-full transition-all duration-500`}
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           )}
         </GlassCard>
@@ -209,31 +246,36 @@ export default function AdminOverviewPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {data?.distributions.status.map((item) => {
-                const total = data.distributions.status.reduce((sum, i) => sum + i.value, 0);
-                const percentage = total > 0 ? (item.value / total) * 100 : 0;
-                const statusColors: Record<string, string> = {
-                  NEW: 'bg-blue-500',
-                  CONTACTED: 'bg-yellow-500',
-                  QUALIFIED: 'bg-green-500',
-                  DISQUALIFIED: 'bg-red-500',
-                  CLOSED: 'bg-purple-500',
-                };
-                return (
-                  <div key={item.name} className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-white/70">{item.name}</span>
-                      <span className="text-white">{item.value} ({Math.round(percentage)}%)</span>
+              {(data?.distributions?.status ?? []).length === 0 ? (
+                <p className="text-white/50 text-center py-8">No data available</p>
+              ) : (
+                (data?.distributions?.status ?? []).map((item) => {
+                  const statuses = data?.distributions?.status ?? [];
+                  const total = statuses.reduce((sum, i) => sum + i.value, 0);
+                  const percentage = total > 0 ? (item.value / total) * 100 : 0;
+                  const statusColors: Record<string, string> = {
+                    NEW: 'bg-blue-500',
+                    CONTACTED: 'bg-yellow-500',
+                    QUALIFIED: 'bg-green-500',
+                    DISQUALIFIED: 'bg-red-500',
+                    CLOSED: 'bg-purple-500',
+                  };
+                  return (
+                    <div key={item.name} className="space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-white/70">{item.name}</span>
+                        <span className="text-white">{item.value} ({Math.round(percentage)}%)</span>
+                      </div>
+                      <div className="h-2 bg-dark-600 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${statusColors[item.name] || 'bg-gray-500'} rounded-full transition-all duration-500`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="h-2 bg-dark-600 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full ${statusColors[item.name] || 'bg-gray-500'} rounded-full transition-all duration-500`}
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           )}
         </GlassCard>
@@ -246,9 +288,11 @@ export default function AdminOverviewPage() {
           <div className="h-32 flex items-center justify-center">
             <div className="animate-spin w-8 h-8 border-2 border-accent-primary border-t-transparent rounded-full" />
           </div>
+        ) : (data?.distributions?.q8 ?? []).length === 0 ? (
+          <p className="text-white/50 text-center py-8">No data available</p>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {data?.distributions.q8.map((item) => (
+            {(data?.distributions?.q8 ?? []).map((item) => (
               <div
                 key={item.name}
                 className="p-4 rounded-xl bg-dark-700/50 text-center"

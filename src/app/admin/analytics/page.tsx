@@ -74,6 +74,22 @@ export default function AnalyticsPage() {
     fetchData();
   }, [dateRange]);
 
+  // Safe defaults for when API fails
+  const defaultChartData: ChartData = {
+    submissionsOverTime: [],
+    scoreHistogram: [],
+    funnel: [],
+    insights: [],
+  };
+
+  const defaultOverviewData: OverviewData = {
+    distributions: {
+      riskLevel: [],
+      q8: [],
+      device: [],
+    },
+  };
+
   const fetchData = async () => {
     setIsLoading(true);
     try {
@@ -89,13 +105,17 @@ export default function AnalyticsPage() {
         fetch(`/api/admin/analytics/overview?${params}`),
       ]);
 
-      const charts = await chartsRes.json();
-      const overview = await overviewRes.json();
+      // Handle non-200 responses gracefully
+      const charts = chartsRes.ok ? await chartsRes.json() : defaultChartData;
+      const overview = overviewRes.ok ? await overviewRes.json() : defaultOverviewData;
 
       setChartData(charts);
       setOverviewData(overview);
     } catch (error) {
       console.error('Error fetching analytics:', error);
+      // Set safe defaults on error
+      setChartData(defaultChartData);
+      setOverviewData(defaultOverviewData);
     } finally {
       setIsLoading(false);
     }
@@ -190,7 +210,7 @@ export default function AnalyticsPage() {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={overviewData?.distributions.riskLevel || []}
+                  data={overviewData?.distributions?.riskLevel ?? []}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -199,7 +219,7 @@ export default function AnalyticsPage() {
                   dataKey="value"
                   nameKey="name"
                 >
-                  {(overviewData?.distributions.riskLevel || []).map((entry) => (
+                  {(overviewData?.distributions?.riskLevel ?? []).map((entry) => (
                     <Cell key={entry.name} fill={RISK_COLORS[entry.name] || COLORS.primary} />
                   ))}
                 </Pie>
@@ -234,7 +254,7 @@ export default function AnalyticsPage() {
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={(overviewData?.distributions.q8 || []).map(d => ({
+                data={(overviewData?.distributions?.q8 ?? []).map(d => ({
                   ...d,
                   name: q8Labels[d.name] || d.name,
                 }))}
@@ -263,7 +283,7 @@ export default function AnalyticsPage() {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={(overviewData?.distributions.device || []).map(d => ({
+                  data={(overviewData?.distributions?.device ?? []).map(d => ({
                     ...d,
                     name: d.name ? d.name.charAt(0).toUpperCase() + d.name.slice(1) : 'Unknown',
                   }))}
@@ -275,7 +295,7 @@ export default function AnalyticsPage() {
                   dataKey="value"
                   nameKey="name"
                 >
-                  {(overviewData?.distributions.device || []).map((_, index) => (
+                  {(overviewData?.distributions?.device ?? []).map((_, index) => (
                     <Cell key={index} fill={DEVICE_COLORS[index % DEVICE_COLORS.length]} />
                   ))}
                 </Pie>
