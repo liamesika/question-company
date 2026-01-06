@@ -21,6 +21,18 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 
+interface LocalizedQuestion {
+  key: string;
+  label: string;
+  answerKey: string;
+  answerLabel: string;
+}
+
+interface LocalizedPayload {
+  locale: string;
+  questions: LocalizedQuestion[];
+}
+
 interface Submission {
   id: string;
   createdAt: string;
@@ -35,6 +47,8 @@ interface Submission {
   utmCampaign: string | null;
   utmContent: string | null;
   utmTerm: string | null;
+  locale?: string;
+  localizedPayload?: LocalizedPayload | null;
   q1: string;
   q2: string;
   q3: string;
@@ -312,18 +326,45 @@ Country: ${submission.country || 'N/A'}
 
           {/* Answers */}
           <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Questionnaire Answers</h3>
-            <div className="space-y-4">
-              {Object.entries(questionLabels).map(([key, label]) => {
-                const answer = submission[key as keyof Submission] as string;
-                const displayAnswer = key === 'q9' ? answer : (answerLabels[key]?.[answer] || answer);
-                return (
-                  <div key={key} className="p-4 rounded-xl bg-dark-700/50">
-                    <p className="text-sm text-white/50 mb-1">{label}</p>
-                    <p className="text-white">{displayAnswer || 'N/A'}</p>
-                  </div>
-                );
-              })}
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Questionnaire Answers</h3>
+              {submission.locale && (
+                <span className={cn(
+                  "px-2 py-1 rounded text-xs font-medium",
+                  submission.locale === 'he'
+                    ? "bg-blue-500/20 text-blue-400"
+                    : "bg-gray-500/20 text-gray-400"
+                )}>
+                  {submission.locale === 'he' ? 'Hebrew (עברית)' : 'English'}
+                </span>
+              )}
+            </div>
+            <div className={cn(
+              "space-y-4",
+              submission.locale === 'he' && "text-right"
+            )} dir={submission.locale === 'he' ? 'rtl' : 'ltr'}>
+              {/* Use localizedPayload if available, otherwise fall back to English labels */}
+              {submission.localizedPayload?.questions ? (
+                submission.localizedPayload.questions
+                  .filter(q => q.key !== 'contact')
+                  .map((q) => (
+                    <div key={q.key} className="p-4 rounded-xl bg-dark-700/50">
+                      <p className="text-sm text-white/50 mb-1">{q.label}</p>
+                      <p className="text-white">{q.answerLabel || 'N/A'}</p>
+                    </div>
+                  ))
+              ) : (
+                Object.entries(questionLabels).map(([key, label]) => {
+                  const answer = submission[key as keyof Submission] as string;
+                  const displayAnswer = key === 'q9' ? answer : (answerLabels[key]?.[answer] || answer);
+                  return (
+                    <div key={key} className="p-4 rounded-xl bg-dark-700/50">
+                      <p className="text-sm text-white/50 mb-1">{label}</p>
+                      <p className="text-white">{displayAnswer || 'N/A'}</p>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </GlassCard>
 

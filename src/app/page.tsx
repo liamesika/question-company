@@ -4,6 +4,8 @@ import { useState, useCallback, useRef } from 'react';
 import { Hero, DiagnosticForm, ResultScreen } from '@/components';
 import { DiagnosticAnswers, ChaosScoreResult } from '@/types/diagnostic';
 import { getClientInfo } from '@/lib/utils';
+import { LocaleProvider } from '@/contexts/LocaleContext';
+import { Locale, buildLocalizedPayload } from '@/lib/i18n';
 
 type AppState = 'hero' | 'diagnostic' | 'result';
 
@@ -20,18 +22,24 @@ export default function HomePage() {
     }, 100);
   }, []);
 
-  const handleSubmit = useCallback(async (answers: DiagnosticAnswers) => {
+  const handleSubmit = useCallback(async (answers: DiagnosticAnswers, locale: Locale) => {
     setIsSubmitting(true);
 
     try {
       const clientInfo = await getClientInfo();
+      const localizedPayload = buildLocalizedPayload(locale, answers as unknown as Record<string, string>);
 
       const response = await fetch('/api/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ answers, clientInfo }),
+        body: JSON.stringify({
+          answers,
+          clientInfo,
+          locale,
+          localizedPayload,
+        }),
       });
 
       if (!response.ok) {
@@ -56,7 +64,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <>
+    <LocaleProvider>
       {appState === 'hero' && (
         <Hero onStartDiagnostic={handleStartDiagnostic} />
       )}
@@ -70,6 +78,6 @@ export default function HomePage() {
       {appState === 'result' && result && (
         <ResultScreen result={result} />
       )}
-    </>
+    </LocaleProvider>
   );
 }

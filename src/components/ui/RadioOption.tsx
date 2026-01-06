@@ -7,9 +7,10 @@ interface RadioOptionProps {
   label: string;
   isSelected: boolean;
   onSelect: (value: string) => void;
+  className?: string;
 }
 
-export function RadioOption({ value, label, isSelected, onSelect }: RadioOptionProps) {
+export function RadioOption({ value, label, isSelected, onSelect, className }: RadioOptionProps) {
   return (
     <button
       type="button"
@@ -19,7 +20,8 @@ export function RadioOption({ value, label, isSelected, onSelect }: RadioOptionP
         'border focus:outline-none focus-glow',
         isSelected
           ? 'bg-gradient-to-r from-accent-primary/20 to-accent-secondary/10 border-accent-primary/50 text-white'
-          : 'glass-card text-white/80 hover:bg-glass-hover hover:border-white/20 hover:text-white'
+          : 'glass-card text-white/80 hover:bg-glass-hover hover:border-white/20 hover:text-white',
+        className
       )}
     >
       <div className="flex items-center gap-4">

@@ -33,6 +33,18 @@ interface UserData {
   riskDistribution: Record<string, number>;
 }
 
+interface LocalizedQuestion {
+  key: string;
+  label: string;
+  answerKey: string;
+  answerLabel: string;
+}
+
+interface LocalizedPayload {
+  locale: string;
+  questions: LocalizedQuestion[];
+}
+
 interface Submission {
   id: string;
   createdAt: string;
@@ -45,6 +57,8 @@ interface Submission {
   deviceType: string | null;
   country: string | null;
   ip: string | null;
+  locale?: string;
+  localizedPayload?: LocalizedPayload | null;
   q1: string;
   q2: string;
   q3: string;
@@ -438,25 +452,59 @@ export default function UserProfilePage({
                   </div>
 
                   {/* Q&A Section */}
-                  <div className="space-y-3">
-                    <h4 className="text-white font-semibold mb-4">Questionnaire Answers</h4>
-                    {(['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9'] as const).map(
-                      (qId) => {
-                        const value = submission[qId];
-                        return (
+                  <div className={cn(
+                    "space-y-3",
+                    submission.locale === 'he' && "text-right"
+                  )} dir={submission.locale === 'he' ? 'rtl' : 'ltr'}>
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-white font-semibold">Questionnaire Answers</h4>
+                      {submission.locale && (
+                        <span className={cn(
+                          "px-2 py-1 rounded text-xs font-medium",
+                          submission.locale === 'he'
+                            ? "bg-blue-500/20 text-blue-400"
+                            : "bg-gray-500/20 text-gray-400"
+                        )}>
+                          {submission.locale === 'he' ? 'עברית' : 'EN'}
+                        </span>
+                      )}
+                    </div>
+                    {/* Use localizedPayload if available */}
+                    {submission.localizedPayload?.questions ? (
+                      submission.localizedPayload.questions
+                        .filter(q => q.key !== 'contact')
+                        .map((q) => (
                           <div
-                            key={qId}
+                            key={q.key}
                             className="p-4 rounded-lg bg-dark-700/50 border border-white/5"
                           >
                             <p className="text-white/60 text-sm mb-2">
-                              {questionLabels[qId]}
+                              {q.label}
                             </p>
                             <p className="text-white font-medium">
-                              {getAnswerLabel(qId, value)}
+                              {q.answerLabel || 'N/A'}
                             </p>
                           </div>
-                        );
-                      }
+                        ))
+                    ) : (
+                      (['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9'] as const).map(
+                        (qId) => {
+                          const value = submission[qId];
+                          return (
+                            <div
+                              key={qId}
+                              className="p-4 rounded-lg bg-dark-700/50 border border-white/5"
+                            >
+                              <p className="text-white/60 text-sm mb-2">
+                                {questionLabels[qId]}
+                              </p>
+                              <p className="text-white font-medium">
+                                {getAnswerLabel(qId, value)}
+                              </p>
+                            </div>
+                          );
+                        }
+                      )
                     )}
                   </div>
                 </div>

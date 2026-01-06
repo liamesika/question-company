@@ -4,6 +4,7 @@ import { calculateChaosScore } from '@/lib/chaos-calculator';
 import { sendCRMWebhook, sendWhatsAppNotification, sendEmailConfirmation } from '@/lib/webhooks';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { LocalizedPayload } from '@/lib/i18n';
 
 // PostgreSQL is the single source of truth - no Google Sheets sync
 
@@ -76,7 +77,7 @@ function getLeakageForRiskLevel(riskLevel: string): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { answers, clientInfo, utm, clientSubmissionId } = body as {
+    const { answers, clientInfo, utm, clientSubmissionId, locale, localizedPayload } = body as {
       answers: DiagnosticAnswers;
       clientInfo: {
         ip: string;
@@ -92,7 +93,12 @@ export async function POST(request: NextRequest) {
         term?: string;
       };
       clientSubmissionId?: string;
+      locale?: string;
+      localizedPayload?: LocalizedPayload;
     };
+
+    // Validate and normalize locale
+    const submissionLocale = locale === 'he' ? 'he' : 'en';
 
     // Validate answers
     if (!answers || typeof answers !== 'object') {
@@ -161,6 +167,9 @@ export async function POST(request: NextRequest) {
           // User identity
           userIdentifier: userIdentifier,
           userDisplayName: null,
+          // Localization
+          locale: submissionLocale,
+          localizedPayload: localizedPayload ? JSON.parse(JSON.stringify(localizedPayload)) : undefined,
           // Client info
           ip: clientInfo?.ip || null,
           country: clientInfo?.country || null,
@@ -189,7 +198,7 @@ export async function POST(request: NextRequest) {
           sheetSyncStatus: 'DISABLED',
         },
       });
-      logger.submission('created', dbSubmission.id, { chaosScore: result.score, riskLevel: result.riskLevel });
+      logger.submission('created', dbSubmission.id, { chaosScore: result.score, riskLevel: result.riskLevel, locale: submissionLocale });
     } catch (dbError) {
       logger.error('Database save error', { error: String(dbError) });
       return NextResponse.json(
